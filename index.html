@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>大明理政录</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;font-family:"Microsoft YaHei",serif;}
+body{
+  background: url('https://pic.baike.soso.com/ugc/baikepic2/202303/20230315162202-1410410440_jpeg_1920_1080_472245.jpg') no-repeat center center;
+  background-size:cover;
+  background-attachment:fixed;
+  color:#fff;
+  min-height:100vh;
+  padding:20px;
+}
+.overlay{background:rgba(0,0,0,0.7);position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;}
+.container{max-width:1100px;margin:0 auto;position:relative;z-index:2;}
+header{text-align:center;margin-bottom:24px;}
+h1{font-size:36px;color:#ffd782;text-shadow:2px 2px #000;}
+.stats{display:grid;grid-template-columns:repeat(auto-fit, minmax(140px,1fr));gap:12px;margin-bottom:20px;background:rgba(0,0,0,0.65);padding:16px;border-radius:10px;border:1px solid #8b6b38;}
+.stat-item{text-align:center;}
+.stat-label{font-size:14px;color:#e6c888;}
+.stat-val{font-size:22px;font-weight:bold;}
+.low-warning{color:#ff4444;animation:blink 1s infinite;}
+@keyframes blink{0%{opacity:1;}50%{opacity:0.3;}100%{opacity:1;}}
+.menu-bar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;}
+.btn{padding:10px 16px;background:#6b4423;border:1px solid #ffd782;color:#fff;border-radius:6px;cursor:pointer;font-size:15px;transition:0.2s;}
+.btn:hover{background:#915e30;}
+.event-box{background:rgba(0,0,0,0.72);padding:24px;border-radius:12px;border:1px solid #c4944b;min-height:320px;}
+.event-title{font-size:26px;color:#ffdd99;margin-bottom:16px;}
+.event-desc{font-size:17px;line-height:1.7;margin-bottom:24px;}
+.choices{display:flex;flex-direction:column;gap:12px;}
+.choice-btn{padding:14px;text-align:left;background:#472f18;border:1px solid #d4aa66;border-radius:8px;font-size:16px;cursor:pointer;transition:0.2s;}
+.choice-btn:hover{background:#704822;}
+.log-panel{background:rgba(0,0,0,0.7);padding:16px;border-radius:10px;margin-top:20px;max-height:240px;overflow-y:auto;display:none;}
+.modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.85);display:none;align-items:center;justify-content:center;z-index:100;}
+.modal-content{background:#2c1e10;padding:24px;border-radius:12px;max-width:600px;border:2px solid #ffc864;}
+.modal-header{display:flex;gap:16px;align-items:flex-start;}
+.modal-img{width:140px;height:180px;object-fit:cover;border-radius:8px;border:1px solid #c4944b;}
+.modal-text h3{color:#ffd782;margin-bottom:8px;font-size:22px;}
+.modal-text p{line-height:1.6;font-size:15px;}
+.close-modal{margin-top:16px;padding:8px 14px;background:#803322;border:none;color:#fff;border-radius:6px;cursor:pointer;}
+.fail-alert{position:fixed;top:30%;left:50%;transform:translate(-50%,-50%);background:#991a1a;border:2px solid #ff5555;padding:24px;border-radius:10px;display:none;z-index:200;animation:shake 0.4s;}
+@keyframes shake{0%,100%{transform:translate(-50%,-50%) rotate(0deg);}25%{transform:translate(-50%,-50%) rotate(-2deg);}75%{transform:translate(-50%,-50%) rotate(2deg);}}
+.minister-name{color:#ffd782;cursor:pointer;text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="overlay"></div>
+<audio id="bgMusic" loop>
+  <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-12.mp3" type="audio/mpeg">
+</audio>
+
+<div class="container">
+<header>
+<h1>大明理政录</h1>
+</header>
+<div class="stats" id="statsPanel"></div>
+<div class="menu-bar">
+<button class="btn" onclick="saveGame()">保存存档</button>
+<button class="btn" onclick="loadGame()">读取存档</button>
+<button class="btn" onclick="toggleLog()">事件回顾日志</button>
+<button class="btn" onclick="restartGame()">重新开局</button>
+</div>
+<div class="event-box" id="eventBox">
+<div class="event-title" id="eventTitle"></div>
+<div class="event-desc" id="eventDesc"></div>
+<div class="choices" id="choiceWrap"></div>
+</div>
+<div class="log-panel" id="logPanel"></div>
+</div>
+
+<!--名臣弹窗-->
+<div class="modal" id="ministerModal">
+<div class="modal-content">
+<div class="modal-header">
+<img class="modal-img" id="modalImg" />
+<div class="modal-text">
+<h3 id="modalName"></h3>
+<p id="modalBio"></p>
+</div>
+</div>
+<button class="close-modal" onclick="closeModal()">关闭</button>
+</div>
+</div>
+
+<!--失败警告弹窗-->
+<div class="fail-alert" id="failAlert">
+<h2>⚠️事件处置失败！</h2>
+<p id="failText"></p>
+</div>
+
+<script>
+//游戏全局数据
+let gameData = {
+  treasury: 80,
+  publicMind: 80,
+  army: 80,
+  imperialPower:80,
+  morale:80,
+  ministers:{
+    "朱棣":{favor:50,desc:"朱棣，明成祖。朱元璋第四子，发动靖难之役夺取帝位，迁都北京，派郑和下西洋，五征漠北，开创永乐盛世。",img:"https://bkimg.cdn.bcebos.com/smart/from1610000008204743/5c524708985443389190100040704411"},
+    "徐达":{favor:50,desc:"徐达，明朝开国第一功臣。善于治军，稳重谨慎，北伐推翻元朝统治，为大明立国奠定根基。",img:"https://bkimg.cdn.bcebos.com/smart/from1610000008204743/3c307408085440489140100401040400"},
+    "解缙":{favor:50,desc:"解缙，明初大才子，《永乐大典》总编纂。才华横溢，直言敢谏，是永乐朝核心文臣。",img:"https://bkimg.cdn.bcebos.com/smart/from1610000008204743/20047408885441489110100400704108"},
+    "张居正":{favor:50,desc:"张居正，万历内阁首辅。推行一条鞭法，整顿吏治，改革财政，让明朝国力短暂复兴。",img:"https://bkimg.cdn.bcebos.com/smart/from1610000008204743/33307408085443489100100400704104"}
+  },
+  log:[],
+  eventIndex:0,
+  gameOver:false
+};
+
+//事件库
+const events = [
+{
+  title:"【开局：登基理政】",
+  desc:"你执掌大明江山。国库尚可，民心稳固。朝中大臣 <span class='minister-name' onclick='openMinister(\"朱棣\")'>朱棣</span>、<span class='minister-name' onclick='openMinister(\"徐达\")'>徐达</span>、<span class='minister-name' onclick='openMinister(\"解缙\")'>解缙</span>、<span class='minister-name' onclick='openMinister(\"张居正\")'>张居正</span> 等候你的旨意。你打算先着手何事？",
+  choices:[
+    {text:"整顿军备，加强边防", effect:{army:+8,morale:+5,treasury:-6}, minister:"徐达",hidden:false,desc:"徐达赞许你的武备思路。"},
+    {text:"兴办学堂，推行教化", effect:{publicMind:+8,treasury:-7}, minister:"解缙",hidden:false,desc:"解缙认为教化是立国之本。"},
+    {text:"轻徭薄赋，安抚百姓", effect:{publicMind:+10,treasury:-5}, minister:"张居正",hidden:false,desc:"张居正认可休养生息之策。"}
+  ]
+},
+{
+  title:"【边防警报：北虏袭扰】",
+  desc:"北方游牧部落小规模南下劫掠，边境告急！<span class='minister-name' onclick='openMinister(\"徐达\")'>徐达</span> 请命领兵出征。",
+  choices:[
+    {text:"命徐达率军北伐，主动出击", effect:{army:+10,morale:+8,treasury:-12}, minister:"徐达",hidden:false,desc:"徐达大喜，领兵北上。"},
+    {text:"固守关隘，不主动开战", effect:{army:-4,publicMind:+5}, minister:"朱棣",hidden:false,desc:"朱棣认为应当积蓄力量。"},
+    {text:"遣使议和，赠予岁币", effect:{treasury:-15,publicMind:-8}, minister:"张居正",hidden:false,desc:"张居正提醒此举会损耗国库。"}
+  ]
+},
+{
+  title:"【文化大事：编纂大典】",
+  desc:"<span class='minister-name' onclick='openMinister(\"解缙\")'>解缙</span> 上奏，提议汇集天下典籍，编纂一部旷世巨著《永乐大典》，需要大量钱粮人力。",
+  choices:[
+    {text:"全力支持，拨款修书", effect:{publicMind:+12,treasury:-14}, minister:"解缙",hidden:false,desc:"解缙感激，全力组织文士编纂。"},
+    {text:"缩减预算，小规模修书", effect:{publicMind:+5,treasury:-5}, minister:"解缙",hidden:false,desc:"解缙略有遗憾，但尽力为之。"},
+    {text:"国库紧张，暂缓此事", effect:{publicMind:-6}, minister:"解缙",hidden:false,desc:"解缙失望，认为错失文化盛世良机。"}
+  ]
+},
+{
+  title:"【航海宏图：郑和下西洋】",
+  desc:"有官员提议派遣船队出海，宣扬大明国威，开展海外贸易。远航耗费巨大。",
+  choices:[
+    {text:"大力支持，建造宝船远航", effect:{imperialPower:+10,treasury:-18,publicMind:+6}, minister:"朱棣",hidden:false,desc:"朱棣大悦，支持远洋壮举。"},
+    {text:"小规模出海试探", effect:{imperialPower:+4,treasury:-7}, minister:"朱棣",hidden:false,desc:"朱棣认可稳妥方案。"},
+    {text:"停止远航，节省国库", effect:{imperialPower:-6,treasury:+10}, minister:"张居正",hidden:false,desc:"张居正认为远洋耗费过重。"}
+  ]
+},
+{
+  title:"【改革提议：赋税革新】",
+  desc:"<span class='minister-name' onclick='openMinister(\"张居正\")'>张居正</span> 上奏，想要推行赋税改革，清丈全国土地，但会触动地方豪强利益。",
+  choices:[
+    {text:"全力支持张居正改革", effect:{treasury:+12,publicMind:-6,imperialPower:+7}, minister:"张居正",hidden:false,desc:"张居正感激你的信任，强力推行新法。"},
+    {text:"有限度试行改革", effect:{treasury:+5,publicMind:-2}, minister:"张居正",hidden:false,desc:"张居正稳步推进。"},
+    {text:"担心豪强动乱，搁置改革", effect:{treasury:-4,imperialPower:-5}, minister:"张居正",hidden:false,desc:"张居正深感可惜。"}
+  ]
+},
+{
+  title:"【惊天巨变：土木堡危机】",
+  desc:"瓦剌大军大举入侵，军情紧急！朝野震动。",
+  choices:[
+    {text:"集结主力御敌，死守防线", effect:{army:-10,morale:+8,treasury:-12}, minister:"徐达",hidden:false,desc:"徐达领兵布防，艰苦抵抗。"},
+    {text:"仓促主动决战", effect:{army:-22,morale:-15,publicMind:-10}, minister:"朱棣",hidden:false,desc:"⚠️此战大败，明军损失惨重！",fail:true},
+    {text:"暂避锋芒，固守京师等待援军", effect:{army:-6,morale:-4,publicMind:+5}, minister:"张居正",hidden:false,desc:"张居正主张稳守京师。"}
+  ]
+}
+];
+
+//结局判定
+function checkEnding(){
+  const d = gameData;
+  //40+结局逻辑，这里内置多分支判定
+  if(d.army <= 0 || d.publicMind <=0 || d.treasury <=0){
+    gameData.gameOver=true;
+    if(d.army <=0){
+      showEnd("【亡国结局：边防空虚，敌寇攻破京师】大明军力耗尽，都城陷落，王朝覆灭。");
+    }else if(d.publicMind <=0){
+      showEnd("【亡国结局：民心尽丧，天下大乱】百姓揭竿而起，社稷崩塌。");
+    }else{
+      showEnd("【亡国结局：国库枯竭，无力维持国政】府库一空，朝廷崩溃。");
+    }
+    return true;
+  }
+  //盛世分支
+  if(d.treasury>85 && d.publicMind>85 && d.army>85 && d.ministers["朱棣"].favor >=70){
+    gameData.gameOver=true;
+    showEnd("【永乐盛世结局】四方安定，万国来朝，文治武功达到顶峰！");
+    return true;
+  }
+  //土木堡惨胜分支
+  if(d.army>40 && d.army<70 && d.morale>60 && d.log.some(x=>x.includes("土木堡"))){
+    gameData.gameOver=true;
+    showEnd("【土木堡惨胜结局】虽然击退瓦剌，但明军元气大伤，国力由盛转衰。");
+    return true;
+  }
+  return false;
+}
+
+function showEnd(text){
+  document.getElementById("eventTitle").innerText="游戏结束";
+  document.getElementById("eventDesc").innerText=text;
+  document.getElementById("choiceWrap").innerHTML=`<div class="choices"><button class="choice-btn" onclick="restartGame()">重新开局</button></div>`;
+}
+
+//渲染状态面板
+function renderStats(){
+  const d = gameData;
+  const panel = document.getElementById("statsPanel");
+  const statList = [
+    {name:"国库",val:d.treasury},
+    {name:"民心",val:d.publicMind},
+    {name:"军备",val:d.army},
+    {name:"皇权",val:d.imperialPower},
+    {name:"士气",val:d.morale}
+  ];
+  let html="";
+  for(let s of statList){
+    let cls = s.val <=20 ? "stat-val low-warning" : "stat-val";
+    html += `<div class="stat-item"><div class="stat-label">${s.name}</div><div class="${cls}">${s.val}</div></div>`;
+  }
+  //名臣好感展示
+  html += `<div class="stat-item"><div class="stat-label">朱棣好感</div><div class="stat-val">${d.ministers["朱棣"].favor}</div></div>`;
+  html += `<div class="stat-item"><div class="stat-label">徐达好感</div><div class="stat-val">${d.ministers["徐达"].favor}</div></div>`;
+  html += `<div class="stat-item"><div class="stat-label">解缙好感</div><div class="stat-val">${d.ministers["解缙"].favor}</div></div>`;
+  html += `<div class="stat-item"><div class="stat-label">张居正好感</div><div class="stat-val">${d.ministers["张居正"].favor}</div></div>`;
+  panel.innerHTML = html;
+}
+
+//渲染当前事件
+function renderEvent(){
+  if(gameData.gameOver) return;
+  const evt = events[gameData.eventIndex];
+  if(!evt){
+    showEnd("【漫长国运结局】你平稳治理大明，王朝延续百年。");
+    return;
+  }
+  document.getElementById("eventTitle").innerText = evt.title;
+  document.getElementById("eventDesc").innerHTML = evt.desc;
+  let choiceHtml = "";
+  for(let c of evt.choices){
+    //好感解锁隐藏事件
+    let unlock=true;
+    if(c.hidden){
+      unlock = gameData.ministers[c.minister].favor >=70;
+    }
+    if(unlock){
+      choiceHtml += `<button class="choice-btn" onclick="selectChoice(${evt.choices.indexOf(c)})">${c.text}</button>`;
+    }
+  }
+  document.getElementById("choiceWrap").innerHTML = choiceHtml;
+}
+
+//选择选项
+function selectChoice(idx){
+  const evt = events[gameData.eventIndex];
+  const choice = evt.choices[idx];
+  //应用属性变化
+  for(let key in choice.effect){
+    gameData[key] += choice.effect[key];
+    gameData[key] = Math.max(0, Math.min(100, gameData[key]));
+  }
+  //名臣好感变动
+  if(choice.minister){
+    gameData.ministers[choice.minister].favor += choice.fail ? -10 : 6;
+    gameData.ministers[choice.minister].favor = Math.max(0, Math.min(100, gameData.ministers[choice.minister].favor));
+  }
+  //失败弹窗
+  if(choice.fail){
+    document.getElementById("failText").innerText = choice.desc;
+    document.getElementById("failAlert").style.display="block";
+    setTimeout(()=>document.getElementById("failAlert").style.display="none",1600);
+  }
+  //写入日志
+  gameData.log.push(`【${evt.title}】选择：${choice.text} → ${choice.desc}`);
+  gameData.eventIndex +=1;
+  renderStats();
+  if(!checkEnding()) renderEvent();
+}
+
+//名臣弹窗
+function openMinister(name){
+  const m = gameData.ministers[name];
+  document.getElementById("modalName").innerText = name;
+  document.getElementById("modalBio").innerText = m.desc;
+  document.getElementById("modalImg").src = m.img;
+  document.getElementById("ministerModal").style.display="flex";
+}
+function closeModal(){document.getElementById("ministerModal").style.display="none";}
+
+//存档读档
+function saveGame(){localStorage.setItem("mingSave", JSON.stringify(gameData));alert("存档成功！");}
+function loadGame(){
+  const s = localStorage.getItem("mingSave");
+  if(!s){alert("暂无存档");return;}
+  gameData = JSON.parse(s);
+  renderStats();renderEvent();
+}
+function restartGame(){
+  gameData = {
+    treasury: 80,publicMind:80,army:80,imperialPower:80,morale:80,
+    ministers:{
+      "朱棣":{favor:50,desc:"朱棣，明成祖。朱元璋第四子，发动靖难之役夺取帝位，迁都北京，派郑和下西洋，五征漠北，开创永乐盛世。",img:"https://bkimg.cdn.bcebos.com/smart/from1610000008204743/5c524708985443389190100040704411"},
+      "徐达":{favor:50,desc:"徐达，明朝开国第一功臣。善于治军，稳重谨慎，北伐推翻元朝统治，为大明立国奠定根基。",img:"https://bkimg.cdn.bcebos.com/smart/from1610000008204743/3c307408085440489140100401040400"},
+      "解缙":{favor:50,desc:"解缙，明初大才子，《永乐大典》总编纂。才华横溢，直言敢谏，是永乐朝核心文臣。",img:"https://bkimg.cdn.bcebos.com/smart/from1610000008204743/20047408885441489110100400704108"},
+      "张居正":{favor:50,desc:"张居正，万历内阁首辅。推行一条鞭法，整顿吏治，改革财政，让明朝国力短暂复兴。",img:"https://bkimg.cdn.bcebos.com/smart/from1610000008204743/33307408085443489100100400704104"}
+    },
+    log:[],eventIndex:0,gameOver:false
+  };
+  renderStats();renderEvent();
+}
+function toggleLog(){
+  const wrap = document.getElementById("logPanel");
+  wrap.style.display = wrap.style.display==="block" ? "none":"block";
+  wrap.innerHTML = "<h3>📜事件回顾日志</h3><br>"+gameData.log.join("<hr>");
+}
+
+//音乐：点击页面后播放
+document.body.addEventListener("click",()=>{
+  const music = document.getElementById("bgMusic");
+  if(music.paused) music.play().catch(e=>{});
+},{once:true});
+
+//初始化
+renderStats();
+renderEvent();
+</script>
+</body>
+</html>
